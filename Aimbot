@@ -1,21 +1,51 @@
---// Services
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Silent Aim | Mobile & PC",
+   Icon = 0,
+   LoadingTitle = "Aimbot Interface Suite",
+   LoadingSubtitle = "by madison.dev.",
+   ShowText = "Silent-Aim",
+   Theme = "Serenity",
+   ToggleUIKeybind = "K",
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "Anti-Cheat"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hello"}
+   }
+})
+
+--// Services & Variables
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-
---// Variables
 local Mouse = LocalPlayer:GetMouse()
 
---// Config with defaults
 local config = {
     SilentAimEnabled = false,
     AutoShootEnabled = false,
     TriggerbotEnabled = false,
     AimBone = "Head",
-    PredictionMode = "Linear", -- None, Linear, Exponential
+    PredictionMode = "Linear",
     HitChance = 100,
     FOVRadius = 100,
     SmoothFactor = 0.3,
@@ -24,27 +54,19 @@ local config = {
     BlacklistEnabled = false,
     BlacklistUserIds = {},
     CustomCrosshairEnabled = true,
-    CrosshairStyle = "Plus", -- Plus, Circle
+    CrosshairStyle = "Plus",
     CrosshairColor = Color3.fromRGB(200, 50, 50),
     FOVColor = Color3.fromRGB(200, 50, 50),
 }
-
---// Utility functions
 
 local function isWhitelisted(player)
     if not config.WhitelistEnabled then return true end
     return table.find(config.WhitelistUserIds, player.UserId) ~= nil
 end
-
 local function isBlacklisted(player)
     if not config.BlacklistEnabled then return false end
     return table.find(config.BlacklistUserIds, player.UserId) ~= nil
 end
-
-local function isFriend(player)
-    return LocalPlayer:IsFriendsWith(player.UserId)
-end
-
 local function GetValidPlayers()
     local list = {}
     for _, player in ipairs(Players:GetPlayers()) do
@@ -56,11 +78,10 @@ local function GetValidPlayers()
     end
     return list
 end
-
 local function PredictPosition(part, mode)
     local velocity = part.Velocity
     local position = part.Position
-    local ping = 0.15 -- Approximate latency in seconds
+    local ping = 0.15
     if mode == "None" then
         return position
     elseif mode == "Linear" then
@@ -70,19 +91,9 @@ local function PredictPosition(part, mode)
     end
     return position
 end
-
-local function LerpCFrame(a, b, alpha)
-    local pos = a.Position:Lerp(b.Position, alpha)
-    local forward = a.LookVector:Lerp(b.LookVector, alpha).Unit
-    return CFrame.new(pos, pos + forward)
-end
-
 local function UniversalShoot()
-    -- Desktop mouse click simulation
     UserInputService:SendMouseButtonEvent(Mouse.X, Mouse.Y, Enum.UserInputState.Begin, true)
     UserInputService:SendMouseButtonEvent(Mouse.X, Mouse.Y, Enum.UserInputState.End, true)
-    
-    -- Mobile touch simulation
     if UserInputService.TouchEnabled then
         local vu = game:GetService("VirtualUser")
         vu:CaptureController()
@@ -90,17 +101,14 @@ local function UniversalShoot()
     end
 end
 
---// Crosshair & FOV Drawing
-
-local crosshairLines = {}
-local FOVCircle = Drawing.new("Circle")
+-- Drawing
+local crosshairLines, FOVCircle = {}, Drawing.new("Circle")
 FOVCircle.Visible = false
 FOVCircle.Color = config.FOVColor
 FOVCircle.Thickness = 2
 FOVCircle.Filled = false
 FOVCircle.Radius = config.FOVRadius
 FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
 local function DrawCrosshair()
     if #crosshairLines == 0 then
         for i = 1, 4 do
@@ -111,29 +119,19 @@ local function DrawCrosshair()
             table.insert(crosshairLines, line)
         end
     end
-
     local centerX = Camera.ViewportSize.X / 2
     local centerY = Camera.ViewportSize.Y / 2
     local size = 10
-
     if config.CrosshairStyle == "Plus" then
         crosshairLines[1].From = Vector2.new(centerX - size, centerY)
         crosshairLines[1].To = Vector2.new(centerX + size, centerY)
-
         crosshairLines[2].From = Vector2.new(centerX, centerY - size)
         crosshairLines[2].To = Vector2.new(centerX, centerY + size)
-
-        for i = 3, 4 do
-            crosshairLines[i].Visible = false
-        end
+        for i = 3, 4 do crosshairLines[i].Visible = false end
     elseif config.CrosshairStyle == "Circle" then
-        for i = 1, 4 do
-            crosshairLines[i].Visible = false
-        end
-        -- Circle will be handled by FOVCircle
+        for i = 1, 4 do crosshairLines[i].Visible = false end
     end
 end
-
 local function ClearCrosshair()
     for _, line in ipairs(crosshairLines) do
         line.Visible = false
@@ -142,14 +140,11 @@ local function ClearCrosshair()
     crosshairLines = {}
 end
 
---// Targeting logic
-
 local function GetClosestTarget()
     local closestTarget = nil
     local closestDistance = config.FOVRadius
     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
     local playersList = GetValidPlayers()
-
     for _, player in ipairs(playersList) do
         local char = player.Character
         if char then
@@ -170,513 +165,125 @@ local function GetClosestTarget()
     return closestTarget
 end
 
---// UI Creation (custom minimal, half-transparent, adjustable, with minimize/maximize)
-
-local StarterGui = game:GetService("StarterGui")
-local CoreGui = game:GetService("CoreGui")
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SilentAimUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = CoreGui
-
--- Main Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-MainFrame.BackgroundTransparency = 0.35
-MainFrame.Size = UDim2.new(0, 320, 0, 380)
-MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
-MainFrame.AnchorPoint = Vector2.new(0,0)
-MainFrame.ClipsDescendants = true
-MainFrame.Visible = true
-MainFrame.ZIndex = 5
-MainFrame.Active = true
-MainFrame.Draggable = true
-
-MainFrame.UIStroke = Instance.new("UIStroke", MainFrame)
-MainFrame.UIStroke.Color = Color3.fromRGB(50, 50, 50)
-MainFrame.UIStroke.Thickness = 2
-MainFrame.UIStroke.Transparency = 0.7
-MainFrame.UIStroke.LineJoinMode = Enum.LineJoinMode.Round
-
--- Title
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Parent = MainFrame
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Silent Aim Hub"
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 22
-TitleLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
-TitleLabel.Size = UDim2.new(1, 0, 0, 30)
-TitleLabel.Position = UDim2.new(0, 0, 0, 10)
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Center
-
--- Minimize Button
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Parent = MainFrame
-MinimizeButton.Text = "▼"
-MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
-MinimizeButton.Position = UDim2.new(1, -35, 0, 5)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-MinimizeButton.TextColor3 = Color3.fromRGB(230, 230, 230)
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.TextSize = 18
-MinimizeButton.AutoButtonColor = false
-MinimizeButton.ClipsDescendants = true
-MinimizeButton.AnchorPoint = Vector2.new(0, 0)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.BackgroundTransparency = 0.25
-MinimizeButton.ZIndex = 10
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.TextScaled = false
-MinimizeButton.MouseEnter:Connect(function()
-    TweenService:Create(MinimizeButton, TweenInfo.new(0.15), {BackgroundTransparency=0}):Play()
-end)
-MinimizeButton.MouseLeave:Connect(function()
-    TweenService:Create(MinimizeButton, TweenInfo.new(0.15), {BackgroundTransparency=0.25}):Play()
-end)
-MinimizeButton.ClipsDescendants = false
-MinimizeButton.Roundness = 10
-MinimizeButton.Style = Enum.ButtonStyle.Custom
-
--- Curved rounded corners
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 10)
-Corner.Parent = MinimizeButton
-
--- Container for controls
-local ControlsContainer = Instance.new("ScrollingFrame")
-ControlsContainer.Parent = MainFrame
-ControlsContainer.Size = UDim2.new(1, -20, 1, -60)
-ControlsContainer.Position = UDim2.new(0, 10, 0, 50)
-ControlsContainer.BackgroundTransparency = 1
-ControlsContainer.ScrollBarThickness = 6
-ControlsContainer.CanvasSize = UDim2.new(0, 0, 1, 0)
-ControlsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
-
--- Minimized UI
-local MinimizedFrame = Instance.new("Frame")
-MinimizedFrame.Parent = ScreenGui
-MinimizedFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-MinimizedFrame.BackgroundTransparency = 0.35
-MinimizedFrame.Size = UDim2.new(0, 60, 0, 60)
-MinimizedFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
-MinimizedFrame.Visible = false
-MinimizedFrame.ZIndex = 15
-MinimizedFrame.ClipsDescendants = true
-MinimizedFrame.Active = true
-MinimizedFrame.Draggable = true
-MinimizedFrame.Name = "MinimizedFrame"
-
-local MinimizedButton = Instance.new("TextButton")
-MinimizedButton.Parent = MinimizedFrame
-MinimizedButton.Size = UDim2.new(1, 0, 1, 0)
-MinimizedButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-MinimizedButton.BackgroundTransparency = 0.25
-MinimizedButton.Text = "▶"
-MinimizedButton.Font = Enum.Font.GothamBold
-MinimizedButton.TextColor3 = Color3.fromRGB(230, 230, 230)
-MinimizedButton.TextSize = 24
-MinimizedButton.AutoButtonColor = false
-MinimizedButton.BorderSizePixel = 0
-
-local MinimizedCorner = Instance.new("UICorner")
-MinimizedCorner.CornerRadius = UDim.new(1, 0)
-MinimizedCorner.Parent = MinimizedButton
-
--- Minimize/Maximize logic
-MinimizeButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-    MinimizedFrame.Visible = true
-end)
-
-MinimizedButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = true
-    MinimizedFrame.Visible = false
-end)
-
---// UI Controls creation helper
-local function CreateToggle(name, default, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 28)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = #ControlsContainer:GetChildren() + 1
-
-    local label = Instance.new("TextLabel")
-    label.Parent = container
-    label.Text = name
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 16
-    label.TextColor3 = Color3.fromRGB(230, 230, 230)
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(0.75, 0, 1, 0)
-    label.TextXAlignment = Enum.TextXAlignment.Left
-
-    local toggle = Instance.new("TextButton")
-    toggle.Parent = container
-    toggle.Size = UDim2.new(0.25, -5, 0.7, 0)
-    toggle.Position = UDim2.new(0.75, 0, 0.15, 0)
-    toggle.BackgroundColor3 = default and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(150, 0, 0)
-    toggle.Text = default and "ON" or "OFF"
-    toggle.Font = Enum.Font.GothamBold
-    toggle.TextSize = 14
-    toggle.TextColor3 = Color3.fromRGB(230, 230, 230)
-    toggle.AutoButtonColor = false
-    toggle.BorderSizePixel = 0
-    toggle.Name = name:gsub("%s+", "")
-
-    toggle.MouseButton1Click:Connect(function()
-        default = not default
-        toggle.BackgroundColor3 = default and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(150, 0, 0)
-        toggle.Text = default and "ON" or "OFF"
-        callback(default)
-    end)
-
-    return container
-end
-
-local function CreateDropdown(name, options, default, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 28)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = #ControlsContainer:GetChildren() + 1
-
-    local label = Instance.new("TextLabel")
-    label.Parent = container
-    label.Text = name
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 16
-    label.TextColor3 = Color3.fromRGB(230, 230, 230)
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(0.5, 0, 1, 0)
-    label.TextXAlignment = Enum.TextXAlignment.Left
-
-    local dropdownBtn = Instance.new("TextButton")
-    dropdownBtn.Parent = container
-    dropdownBtn.Size = UDim2.new(0.5, -5, 1, 0)
-    dropdownBtn.Position = UDim2.new(0.5, 0, 0, 0)
-    dropdownBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    dropdownBtn.Text = default
-    dropdownBtn.Font = Enum.Font.GothamBold
-    dropdownBtn.TextSize = 14
-    dropdownBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
-    dropdownBtn.AutoButtonColor = false
-    dropdownBtn.BorderSizePixel = 0
-    dropdownBtn.Name = name:gsub("%s+", "")
-
-    local dropdownMenu = Instance.new("Frame")
-    dropdownMenu.Visible = false
-    dropdownMenu.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    dropdownMenu.Size = UDim2.new(1, 0, 0, 28 * #options)
-    dropdownMenu.Position = UDim2.new(0, 0, 1, 0)
-    dropdownMenu.ZIndex = 20
-    dropdownMenu.ClipsDescendants = true
-    dropdownMenu.Parent = container
-
-    local dropdownUICorner = Instance.new("UICorner")
-    dropdownUICorner.CornerRadius = UDim.new(0, 6)
-    dropdownUICorner.Parent = dropdownMenu
-
-    for i, option in ipairs(options) do
-        local optBtn = Instance.new("TextButton")
-        optBtn.Parent = dropdownMenu
-        optBtn.Size = UDim2.new(1, 0, 0, 28)
-        optBtn.Position = UDim2.new(0, 0, 0, 28 * (i-1))
-        optBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        optBtn.Text = option
-        optBtn.Font = Enum.Font.Gotham
-        optBtn.TextSize = 14
-        optBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
-        optBtn.AutoButtonColor = false
-        optBtn.BorderSizePixel = 0
-
-        optBtn.MouseEnter:Connect(function()
-            optBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-        end)
-        optBtn.MouseLeave:Connect(function()
-            optBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        end)
-
-        optBtn.MouseButton1Click:Connect(function()
-            dropdownBtn.Text = option
-            dropdownMenu.Visible = false
-            callback(option)
-        end)
-    end
-
-    dropdownBtn.MouseButton1Click:Connect(function()
-        dropdownMenu.Visible = not dropdownMenu.Visible
-    end)
-
-    return container
-end
-
-local function CreateSlider(name, min, max, default, suffix, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 36)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = #ControlsContainer:GetChildren() + 1
-
-    local label = Instance.new("TextLabel")
-    label.Parent = container
-    label.Text = name
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 16
-    label.TextColor3 = Color3.fromRGB(230, 230, 230)
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(1, 0, 0, 18)
-    label.TextXAlignment = Enum.TextXAlignment.Left
-
-    local sliderFrame = Instance.new("Frame")
-    sliderFrame.Parent = container
-    sliderFrame.Size = UDim2.new(1, 0, 0, 14)
-    sliderFrame.Position = UDim2.new(0, 0, 0, 22)
-    sliderFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    sliderFrame.BorderSizePixel = 0
-    sliderFrame.ClipsDescendants = true
-    sliderFrame.Active = true
-
-    local sliderUICorner = Instance.new("UICorner")
-    sliderUICorner.CornerRadius = UDim.new(0, 6)
-    sliderUICorner.Parent = sliderFrame
-
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Parent = sliderFrame
-    sliderFill.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    sliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-
-    local sliderInput = Instance.new("TextBox")
-    sliderInput.Parent = container
-    sliderInput.Size = UDim2.new(0, 50, 0, 20)
-    sliderInput.Position = UDim2.new(1, -55, 0, 2)
-    sliderInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    sliderInput.BorderSizePixel = 0
-    sliderInput.TextColor3 = Color3.fromRGB(230, 230, 230)
-    sliderInput.Text = tostring(default)
-    sliderInput.ClearTextOnFocus = false
-    sliderInput.Font = Enum.Font.Gotham
-    sliderInput.TextSize = 14
-    sliderInput.TextXAlignment = Enum.TextXAlignment.Center
-
-    local dragging = false
-    local minVal, maxVal = min, max
-
-    sliderFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-        end
-    end)
-
-    sliderFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local relativeX = math.clamp(input.Position.X - sliderFrame.AbsolutePosition.X, 0, sliderFrame.AbsoluteSize.X)
-            local value = minVal + (relativeX / sliderFrame.AbsoluteSize.X) * (maxVal - minVal)
-            value = math.floor(value * 100) / 100
-            sliderFill.Size = UDim2.new((value - minVal) / (maxVal - minVal), 0, 1, 0)
-            sliderInput.Text = tostring(value)
-            callback(value)
-        end
-    end)
-
-    sliderInput.FocusLost:Connect(function()
-        local value = tonumber(sliderInput.Text)
-        if value then
-            value = math.clamp(value, minVal, maxVal)
-            sliderFill.Size = UDim2.new((value - minVal) / (maxVal - minVal), 0, 1, 0)
-            sliderInput.Text = tostring(value)
-            callback(value)
-        else
-            sliderInput.Text = tostring(default)
-        end
-    end)
-
-    return container
-end
-
---// Add Controls
-
-local aimBoneDropdown = CreateDropdown("Aim Bone", {"Head", "HumanoidRootPart"}, config.AimBone, function(val)
-    config.AimBone = val
-end)
-aimBoneDropdown.Parent = ControlsContainer
-
-local silentAimToggle = CreateToggle("Silent Aim", config.SilentAimEnabled, function(val)
-    config.SilentAimEnabled = val
-    FOVCircle.Visible = val
-end)
-silentAimToggle.Parent = ControlsContainer
-
-local predictionDropdown = CreateDropdown("Prediction Mode", {"None", "Linear", "Exponential"}, config.PredictionMode, function(val)
-    config.PredictionMode = val
-end)
-predictionDropdown.Parent = ControlsContainer
-
-local hitChanceSlider = CreateSlider("Hit Chance", 0, 100, config.HitChance, "%", function(val)
-    config.HitChance = val
-end)
-hitChanceSlider.Parent = ControlsContainer
-
-local fovSlider = CreateSlider("FOV Radius", 10, 300, config.FOVRadius, "px", function(val)
-    config.FOVRadius = val
-    FOVCircle.Radius = val
-end)
-fovSlider.Parent = ControlsContainer
-
-local walkSpeedSlider = CreateSlider("Walk Speed", 8, 100, config.WalkSpeed, "studs/s", function(val)
-    config.WalkSpeed = val
-    game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = val
-end)
-walkSpeedSlider.Parent = ControlsContainer
-
-local infiniteJumpToggle = CreateToggle("Infinite Jump", config.InfiniteJumpEnabled, function(val)
-    config.InfiniteJumpEnabled = val
-end)
-infiniteJumpToggle.Parent = ControlsContainer
-
----
-
-### To add mobile support and improve minimization:
-
-1. Use `UserInputService.TouchEnabled` to detect if on mobile.
-2. Adjust UI size, buttons, and touch responsiveness.
-3. Minimized UI should be large enough for touch.
-4. Add a draggable feature for the minimized frame on mobile.
-5. Add mobile-friendly button sizes and spacing.
-
----
-
-Here is the full improved snippet with mobile support and minimizable UI. Replace the UI creation section in your script with this: 
-
-```lua
-local UserInputService = game:GetService("UserInputService")
-
--- Main Frames
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Size = UDim2.new(0, 320, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.Visible = true
-MainFrame.Parent = game.CoreGui
-
-local UICornerMain = Instance.new("UICorner", MainFrame)
-UICornerMain.CornerRadius = UDim.new(0, 8)
-
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Text = "–"
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.TextSize = 24
-MinimizeButton.TextColor3 = Color3.fromRGB(230, 230, 230)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Size = UDim2.new(0, 40, 0, 30)
-MinimizeButton.Position = UDim2.new(1, -45, 0, 5)
-MinimizeButton.AnchorPoint = Vector2.new(1, 0)
-MinimizeButton.Parent = MainFrame
-MinimizeButton.AutoButtonColor = true
-
--- Minimized Frame (small button to restore)
-local MinimizedFrame = Instance.new("Frame")
-MinimizedFrame.Name = "MinimizedFrame"
-MinimizedFrame.Size = UDim2.new(0, 120, 0, 40)
-MinimizedFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MinimizedFrame.Position = UDim2.new(0, 20, 0.8, 0)
-MinimizedFrame.Visible = false
-MinimizedFrame.AnchorPoint = Vector2.new(0, 0)
-MinimizedFrame.Parent = game.CoreGui
-
-local UICornerMin = Instance.new("UICorner", MinimizedFrame)
-UICornerMin.CornerRadius = UDim.new(0, 8)
-
-local MinimizedButton = Instance.new("TextButton")
-MinimizedButton.Size = UDim2.new(1, 0, 1, 0)
-MinimizedButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-MinimizedButton.TextColor3 = Color3.fromRGB(230, 230, 230)
-MinimizedButton.Text = "Open Menu"
-MinimizedButton.Font = Enum.Font.GothamBold
-MinimizedButton.TextSize = 20
-MinimizedButton.BorderSizePixel = 0
-MinimizedButton.Parent = MinimizedFrame
-MinimizedButton.AutoButtonColor = true
-
--- Draggable for minimized on mobile
-local draggingMinimized = false
-local dragInput, dragStart, startPos
-
-local function updateMinimizedPosition(input)
-    local delta = input.Position - dragStart
-    MinimizedFrame.Position = UDim2.new(
-        0, math.clamp(startPos.X + delta.X, 0, workspace.CurrentCamera.ViewportSize.X - MinimizedFrame.AbsoluteSize.X),
-        0, math.clamp(startPos.Y + delta.Y, 0, workspace.CurrentCamera.ViewportSize.Y - MinimizedFrame.AbsoluteSize.Y)
-    )
-end
-
-MinimizedFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        draggingMinimized = true
-        dragStart = input.Position
-        startPos = MinimizedFrame.Position
-
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                draggingMinimized = false
+-- Rayfield Tabs & Controls
+local TabAimbot = Window:CreateTab("Aimbot", 4483362458)
+local TabVisuals = Window:CreateTab("Visuals", 4483362458)
+
+TabAimbot:CreateToggle({
+    Name = "Silent Aim",
+    CurrentValue = config.SilentAimEnabled,
+    Flag = "SilentAimEnabled",
+    Callback = function(v) config.SilentAimEnabled = v end
+})
+TabAimbot:CreateToggle({
+    Name = "Auto Shoot",
+    CurrentValue = config.AutoShootEnabled,
+    Flag = "AutoShootEnabled",
+    Callback = function(v) config.AutoShootEnabled = v end
+})
+TabAimbot:CreateToggle({
+    Name = "Triggerbot",
+    CurrentValue = config.TriggerbotEnabled,
+    Flag = "TriggerbotEnabled",
+    Callback = function(v) config.TriggerbotEnabled = v end
+})
+TabAimbot:CreateDropdown({
+    Name = "Aim Bone",
+    Options = {"Head", "UpperTorso", "HumanoidRootPart"},
+    CurrentOption = config.AimBone,
+    Flag = "AimBone",
+    Callback = function(v) config.AimBone = v[1] end
+})
+TabAimbot:CreateDropdown({
+    Name = "Prediction",
+    Options = {"None", "Linear", "Exponential"},
+    CurrentOption = config.PredictionMode,
+    Flag = "PredictionMode",
+    Callback = function(v) config.PredictionMode = v[1] end
+})
+TabAimbot:CreateSlider({
+    Name = "Hit Chance",
+    Range = {0, 100},
+    Increment = 1,
+    CurrentValue = config.HitChance,
+    Flag = "HitChance",
+    Callback = function(v) config.HitChance = v end
+})
+TabAimbot:CreateSlider({
+    Name = "FOV Radius",
+    Range = {20, 400},
+    Increment = 1,
+    CurrentValue = config.FOVRadius,
+    Flag = "FOVRadius",
+    Callback = function(v) config.FOVRadius = v; FOVCircle.Radius = v end
+})
+TabAimbot:CreateSlider({
+    Name = "Smooth",
+    Range = {0.01, 1},
+    Increment = 0.01,
+    CurrentValue = config.SmoothFactor,
+    Flag = "SmoothFactor",
+    Callback = function(v) config.SmoothFactor = v end
+})
+
+TabVisuals:CreateDropdown({
+    Name = "Crosshair Style",
+    Options = {"Plus", "Circle"},
+    CurrentOption = config.CrosshairStyle,
+    Flag = "CrosshairStyle",
+    Callback = function(v) config.CrosshairStyle = v[1] end
+})
+TabVisuals:CreateToggle({
+    Name = "Custom Crosshair",
+    CurrentValue = config.CustomCrosshairEnabled,
+    Flag = "CustomCrosshairEnabled",
+    Callback = function(v) config.CustomCrosshairEnabled = v end
+})
+
+-- Main loop
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Visible = config.CustomCrosshairEnabled
+    FOVCircle.Color = config.FOVColor
+    FOVCircle.Radius = config.FOVRadius
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    if config.CustomCrosshairEnabled then DrawCrosshair() else ClearCrosshair() end
+
+    local target = GetClosestTarget()
+    if target then
+        local char = target.Character
+        if char and char:FindFirstChild(config.AimBone) then
+            local part = char[config.AimBone]
+            local aimPos = PredictPosition(part, config.PredictionMode)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(aimPos)
+            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+            local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+            if config.SilentAimEnabled and dist <= config.FOVRadius and math.random(0,100) <= config.HitChance then
+                if config.AutoShootEnabled then UniversalShoot() end
             end
-        end)
+            if config.TriggerbotEnabled and dist < 15 then UniversalShoot() end
+        end
     end
 end)
 
-MinimizedFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
+-- Silent Aim Raycast hook (wallbang, universal)
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if config.SilentAimEnabled and (method == "FindPartOnRay" or method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
+        local target = GetClosestTarget()
+        if target and target.Character and target.Character:FindFirstChild(config.AimBone) then
+            local part = target.Character[config.AimBone]
+            local predicted = PredictPosition(part, config.PredictionMode)
+            local origin = args[1].Origin or args[1].p or args[1].Position or args[1]
+            local direction = (predicted - origin).Unit * (args[2] and args[2].Magnitude or 500)
+            if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
+                args[1] = Ray.new(origin, direction)
+            elseif method == "Raycast" then
+                args[2] = direction
+            end
+            return oldNamecall(self, unpack(args))
+        end
     end
+    return oldNamecall(self, ...)
 end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if draggingMinimized and input == dragInput then
-        updateMinimizedPosition(input)
-    end
-end)
-
--- Minimize & Restore
-MinimizeButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-    MinimizedFrame.Visible = true
-end)
-
-MinimizedButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = true
-    MinimizedFrame.Visible = false
-end)
-
--- Controls Container
-local ControlsContainer = Instance.new("UIListLayout")
-ControlsContainer.Parent = MainFrame
-ControlsContainer.SortOrder = Enum.SortOrder.LayoutOrder
-ControlsContainer.Padding = UDim.new(0, 6)
-
-local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -20, 1, -50)
-ScrollingFrame.Position = UDim2.new(0, 10, 0, 40)
-ScrollingFrame.BackgroundTransparency = 1
-ScrollingFrame.ScrollBarThickness = 6
-ScrollingFrame.Parent = MainFrame
-ControlsContainer.Parent = ScrollingFrame
-
--- Example: Add a toggle control
--- Add your toggles, dropdowns, sliders here as before
-
--- Adjust sizes if on mobile for better usability
-if UserInputService.TouchEnabled then
-    MainFrame.Size = UDim2.new(0, 360, 0, 450)
-    MinimizeButton.Size = UDim2.new(0, 50, 0, 40)
-    MinimizedFrame.Size = UDim2.new(0, 140, 0, 50)
-    MinimizedButton.TextSize = 24
-end
